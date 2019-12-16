@@ -29,6 +29,11 @@ agent.on('ms.MessagingEventNotification', onMessagingEvent);
 
 function onConnected () {
     console.log('connected...');
+    // subscribe to routing tasks
+    agent.subscribeRoutingTasks({}, e => {
+        if (e) { console.error(e) }
+        else console.log('subscribed to routing tasks')
+    });
     // Set agent to online to receive incoming conversations
     agent.setAgentState({availability: 'ONLINE'});
     // Keep the connection alive
@@ -59,11 +64,13 @@ function onRoutingNotification (body) {
         if (change.type === 'UPSERT') {
             change.result.ringsDetails.forEach(ring => {
                 if (ring.ringState === 'WAITING') {
+                    console.log('incoming conversation');
                     agent.updateRingState({
                         'ringId': ring.ringId,
                         'ringState': 'ACCEPTED'
                     }, (e) => {
                         if (e) { console.error(`error accepting conversation ${JSON.stringify(e)}`) }
+                        else console.log('conversation accepted')
                     });
                 }
             });
@@ -75,21 +82,25 @@ function onMessagingEvent (body) {
     body.changes.forEach(change => {
         // if this is a file obtain the info needed to create the download URL
         if (change.event.type === 'ContentEvent' && change.event.message && change.event.message.relativePath) {
-            agent.generateURLForDownloadFile({relativePath: change.event.message.relativePath}, (err, data) => downloadFile(err, data, body.dialogId));
+            console.log('file received');
+            agent.generateURLForDownloadFile({relativePath: change.event.message.relativePath}, (err, data) => downloadFile(data, body.dialogId));
         }
     });
 }
 
-function downloadFile (err, data, dialogId) {
+function downloadFile (data, dialogId) {
     // agent.swiftDomain was set in onConnected
     let url = `https://${agent.swiftDomain}${data.relativePath}?temp_url_sig=${data.queryParams.temp_url_sig}&temp_url_expires=${data.queryParams.temp_url_expires}`;
     console.log(url);
     let ext = data.relativePath.split('.').pop().toLowerCase();
     let ts = new Date().getTime();
     let file = fs.createWriteStream(`files/${conf.accountId}_${dialogId}_${ts}.${ext}`);
-    https.get(url, (data) => {
-        data.pipe(file, () => {
-            file.close()
+    https.get(url, response => {
+        response
+          .on('data', data => { file.write(data) })
+          .on('end', () => {
+            console.log('file downloaded');
+            file.end();
         });
     });
 }
