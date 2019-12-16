@@ -1,6 +1,6 @@
 {
   "name": "file_download_bot",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "demonstration of the capacity for bots to download files sent in conversation",
   "main": "index.js",
   "scripts": {
